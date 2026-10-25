@@ -352,6 +352,10 @@ const transports = new Map<string, StreamableHTTPServerTransport>();
 
 app.use(express.json({ limit: "10mb" }));
 
+async function checkHomeboxConnectivity() {
+  await homeboxRequest("/v1/items", "GET", undefined, { limit: 1 });
+}
+
 function requireMcpBearerToken(req: any, res: any, next: any) {
   const expected = `Bearer ${config.mcpAuthToken}`;
   const authHeader = req.headers.authorization ?? "";
@@ -364,8 +368,22 @@ function requireMcpBearerToken(req: any, res: any, next: any) {
   next();
 }
 
-app.get("/health", (_req, res) => {
+app.get("/healthz", (_req, res) => {
   res.json({ ok: true, name: "homebox-mcp" });
+});
+
+app.get("/readyz", async (_req, res) => {
+  try {
+    await checkHomeboxConnectivity();
+    res.json({ ok: true, homebox: "reachable" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    res.status(503).json({ ok: false, homebox: "unreachable", error: message });
+  }
+});
+
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, name: "homebox-mcp", deprecated: "use /healthz" });
 });
 
 app.all("/mcp", requireMcpBearerToken, async (req, res) => {

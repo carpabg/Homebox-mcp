@@ -22,25 +22,34 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
           if [[ "${VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc[0-9]+)?$ ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
+            RC_SUFFIX="${BASH_REMATCH[4]}"
             echo "major=${MAJOR}" >> "$GITHUB_OUTPUT"
-            echo "minor=${MINOR}" >> "$GITHUB_OUTPUT"
             echo "major_minor=${MAJOR}.${MINOR}" >> "$GITHUB_OUTPUT"
+
+            if [[ -n "${RC_SUFFIX}" ]]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+              echo "major_rc=${MAJOR}${RC_SUFFIX}" >> "$GITHUB_OUTPUT"
+              echo "major_minor_rc=${MAJOR}.${MINOR}${RC_SUFFIX}" >> "$GITHUB_OUTPUT"
+              echo "docker_tag=prelatest" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+              echo "major_rc=" >> "$GITHUB_OUTPUT"
+              echo "major_minor_rc=" >> "$GITHUB_OUTPUT"
+              echo "docker_tag=latest" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "major=" >> "$GITHUB_OUTPUT"
-            echo "minor=" >> "$GITHUB_OUTPUT"
             echo "major_minor=" >> "$GITHUB_OUTPUT"
-          fi
-          if [[ "${TAG}" =~ -rc[0-9]+$ ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "major_rc=" >> "$GITHUB_OUTPUT"
+            echo "major_minor_rc=" >> "$GITHUB_OUTPUT"
             echo "docker_tag=prelatest" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "docker_tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up QEMU
@@ -65,12 +74,12 @@ jobs:
             latest=false
           tags: |
             type=raw,value=${{ steps.tagtype.outputs.version }}
-            type=raw,value=${{ steps.tagtype.outputs.tag }},enable=true
             type=raw,value=${{ steps.tagtype.outputs.major }},enable=${{ steps.tagtype.outputs.major != '' && steps.tagtype.outputs.is_prerelease == 'false' }}
             type=raw,value=${{ steps.tagtype.outputs.major_minor }},enable=${{ steps.tagtype.outputs.major_minor != '' && steps.tagtype.outputs.is_prerelease == 'false' }}
+            type=raw,value=${{ steps.tagtype.outputs.major_rc }},enable=${{ steps.tagtype.outputs.major_rc != '' && steps.tagtype.outputs.is_prerelease == 'true' }}
+            type=raw,value=${{ steps.tagtype.outputs.major_minor_rc }},enable=${{ steps.tagtype.outputs.major_minor_rc != '' && steps.tagtype.outputs.is_prerelease == 'true' }}
+            type=raw,value=${{ steps.tagtype.outputs.commit_sha }},enable=true
             type=raw,value=${{ steps.tagtype.outputs.docker_tag }},enable=true
-            type=raw,value=latest,enable=${{ steps.tagtype.outputs.is_prerelease == 'false' }}
-            type=raw,value=prelatest,enable=${{ steps.tagtype.outputs.is_prerelease == 'true' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
