@@ -7,11 +7,6 @@ import { assertRuntimeConfig, config, homeboxRequest } from "./homebox.js";
 
 assertRuntimeConfig();
 
-const server = new McpServer({
-  name: "homebox-mcp",
-  version: "1.0.0",
-});
-
 function asToolResult(payload: unknown) {
   const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
 
@@ -25,327 +20,300 @@ function asToolResult(payload: unknown) {
   };
 }
 
-const paginationSchema = {
-  limit: z.number().int().positive().max(500).optional(),
-  offset: z.number().int().nonnegative().optional(),
-  sort: z.string().optional(),
-  order: z.enum(["asc", "desc"]).optional(),
-};
+function createServer(): McpServer {
+  const server = new McpServer({
+    name: "homebox-mcp",
+    version: "1.0.0",
+  });
 
-server.tool(
-  "homebox_api_request",
-  {
-    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
-    path: z.string().describe("Homebox API path, e.g. /v1/items or /v1/items/{id}"),
-    query: z.record(z.string(), z.any()).optional(),
-    body: z.any().optional(),
-  },
-  async ({ method, path, query, body }) => {
-    const result = await homeboxRequest(path, method, body, query);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_api_request",
+    {
+      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET"),
+      path: z.string().describe("Homebox API path, e.g. /v1/entities or /v1/entities/{id}"),
+      query: z.record(z.string(), z.any()).optional(),
+      body: z.any().optional(),
+    },
+    async ({ method, path, query, body }) => {
+      const result = await homeboxRequest(path, method, body, query);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_items",
-  {
-    ...paginationSchema,
-    q: z.string().optional(),
-    location_id: z.string().optional(),
-    category_id: z.string().optional(),
-  },
-  async ({ limit, offset, sort, order, q, location_id, category_id }) => {
-    const result = await homeboxRequest("/v1/items", "GET", undefined, {
-      limit,
-      offset,
-      sort,
-      order,
-      q,
-      location_id,
-      category_id,
-    });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_list_entities",
+    {
+      q: z.string().optional().describe("Search query"),
+      page: z.number().int().positive().optional(),
+      pageSize: z.number().int().positive().max(500).optional(),
+      orderBy: z.string().optional(),
+      orderDirection: z.enum(["asc", "desc"]).optional(),
+      tags: z.string().optional().describe("Comma-separated tag names or IDs"),
+      matchAllTags: z.boolean().optional(),
+      parentIds: z.string().optional().describe("Comma-separated parent entity IDs (location filter)"),
+      entityTypeIds: z.string().optional().describe("Comma-separated entity type IDs (type filter)"),
+    },
+    async ({ q, page, pageSize, orderBy, orderDirection, tags, matchAllTags, parentIds, entityTypeIds }) => {
+      const result = await homeboxRequest("/v1/entities", "GET", undefined, {
+        q,
+        page,
+        pageSize,
+        orderBy,
+        orderDirection,
+        tags,
+        matchAllTags,
+        parentIds,
+        entityTypeIds,
+      });
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_item",
-  { id: z.string().describe("Item ID") },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/items/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_get_entity",
+    { id: z.string().describe("Entity ID") },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/entities/${id}`, "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_create_item",
-  { payload: z.any().describe("Item payload to send to Homebox") },
-  async ({ payload }) => {
-    const result = await homeboxRequest("/v1/items", "POST", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_create_entity",
+    { payload: z.any().describe("Entity payload to send to Homebox") },
+    async ({ payload }) => {
+      const result = await homeboxRequest("/v1/entities", "POST", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_update_item",
-  { id: z.string(), payload: z.any() },
-  async ({ id, payload }) => {
-    const result = await homeboxRequest(`/v1/items/${id}`, "PUT", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_update_entity",
+    { id: z.string(), payload: z.any() },
+    async ({ id, payload }) => {
+      const result = await homeboxRequest(`/v1/entities/${id}`, "PUT", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_delete_item",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/items/${id}`, "DELETE");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_patch_entity",
+    { id: z.string(), payload: z.any() },
+    async ({ id, payload }) => {
+      const result = await homeboxRequest(`/v1/entities/${id}`, "PATCH", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_locations",
-  { ...paginationSchema, q: z.string().optional() },
-  async ({ limit, offset, sort, order, q }) => {
-    const result = await homeboxRequest("/v1/locations", "GET", undefined, { limit, offset, sort, order, q });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_delete_entity",
+    { id: z.string() },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/entities/${id}`, "DELETE");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_location",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/locations/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_entity_tree",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/entities/tree", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_create_location",
-  { payload: z.any() },
-  async ({ payload }) => {
-    const result = await homeboxRequest("/v1/locations", "POST", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_location_statistics",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/groups/statistics/locations", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_update_location",
-  { id: z.string(), payload: z.any() },
-  async ({ id, payload }) => {
-    const result = await homeboxRequest(`/v1/locations/${id}`, "PUT", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_list_entity_types",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/entity-types", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_delete_location",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/locations/${id}`, "DELETE");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_create_entity_type",
+    { payload: z.any() },
+    async ({ payload }) => {
+      const result = await homeboxRequest("/v1/entity-types", "POST", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_categories",
-  { ...paginationSchema, q: z.string().optional() },
-  async ({ limit, offset, sort, order, q }) => {
-    const result = await homeboxRequest("/v1/categories", "GET", undefined, { limit, offset, sort, order, q });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_update_entity_type",
+    { id: z.string(), payload: z.any() },
+    async ({ id, payload }) => {
+      const result = await homeboxRequest(`/v1/entity-types/${id}`, "PUT", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_category",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/categories/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_delete_entity_type",
+    { id: z.string() },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/entity-types/${id}`, "DELETE");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_create_category",
-  { payload: z.any() },
-  async ({ payload }) => {
-    const result = await homeboxRequest("/v1/categories", "POST", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_list_tags",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/tags", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_update_category",
-  { id: z.string(), payload: z.any() },
-  async ({ id, payload }) => {
-    const result = await homeboxRequest(`/v1/categories/${id}`, "PUT", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_get_tag",
+    { id: z.string() },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/tags/${id}`, "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_delete_category",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/categories/${id}`, "DELETE");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_create_tag",
+    { payload: z.any() },
+    async ({ payload }) => {
+      const result = await homeboxRequest("/v1/tags", "POST", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_labels",
-  { ...paginationSchema, q: z.string().optional() },
-  async ({ limit, offset, sort, order, q }) => {
-    const result = await homeboxRequest("/v1/labels", "GET", undefined, { limit, offset, sort, order, q });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_update_tag",
+    { id: z.string(), payload: z.any() },
+    async ({ id, payload }) => {
+      const result = await homeboxRequest(`/v1/tags/${id}`, "PUT", payload);
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_label",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/labels/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_delete_tag",
+    { id: z.string() },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/tags/${id}`, "DELETE");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_create_label",
-  { payload: z.any() },
-  async ({ payload }) => {
-    const result = await homeboxRequest("/v1/labels", "POST", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_get_asset",
+    { id: z.string().describe("Asset ID") },
+    async ({ id }) => {
+      const result = await homeboxRequest(`/v1/assets/${id}`, "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_update_label",
-  { id: z.string(), payload: z.any() },
-  async ({ id, payload }) => {
-    const result = await homeboxRequest(`/v1/labels/${id}`, "PUT", payload);
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_get_current_user",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/users/self", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_delete_label",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/labels/${id}`, "DELETE");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_list_entity_fields",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/entities/fields", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_assets",
-  { ...paginationSchema, q: z.string().optional() },
-  async ({ limit, offset, sort, order, q }) => {
-    const result = await homeboxRequest("/v1/assets", "GET", undefined, { limit, offset, sort, order, q });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_entity_field_values",
+    { field: z.string().describe("Field name to get distinct values for") },
+    async ({ field }) => {
+      const result = await homeboxRequest("/v1/entities/fields/values", "GET", undefined, { field });
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_asset",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/assets/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_group_statistics",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/groups/statistics", "GET");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_users",
-  { ...paginationSchema },
-  async ({ limit, offset, sort, order }) => {
-    const result = await homeboxRequest("/v1/users", "GET", undefined, { limit, offset, sort, order });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_create_missing_thumbnails",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/create-missing-thumbnails", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_user",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/users/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_ensure_asset_ids",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/ensure-asset-ids", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_list_fields",
-  { ...paginationSchema },
-  async ({ limit, offset, sort, order }) => {
-    const result = await homeboxRequest("/v1/fields", "GET", undefined, { limit, offset, sort, order });
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_ensure_import_refs",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/ensure-import-refs", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_get_field",
-  { id: z.string() },
-  async ({ id }) => {
-    const result = await homeboxRequest(`/v1/fields/${id}`, "GET");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_set_primary_photos",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/set-primary-photos", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_create_missing_thumbnails",
-  {},
-  async () => {
-    const result = await homeboxRequest("/v1/actions/create-missing-thumbnails", "POST");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_wipe_inventory",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/wipe-inventory", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_ensure_asset_ids",
-  {},
-  async () => {
-    const result = await homeboxRequest("/v1/actions/ensure-asset-ids", "POST");
-    return asToolResult(result);
-  }
-);
+  server.tool(
+    "homebox_zero_item_time_fields",
+    {},
+    async () => {
+      const result = await homeboxRequest("/v1/actions/zero-item-time-fields", "POST");
+      return asToolResult(result);
+    }
+  );
 
-server.tool(
-  "homebox_ensure_import_refs",
-  {},
-  async () => {
-    const result = await homeboxRequest("/v1/actions/ensure-import-refs", "POST");
-    return asToolResult(result);
-  }
-);
-
-server.tool(
-  "homebox_set_primary_photos",
-  { payload: z.any() },
-  async ({ payload }) => {
-    const result = await homeboxRequest("/v1/actions/set-primary-photos", "POST", payload);
-    return asToolResult(result);
-  }
-);
-
-server.tool(
-  "homebox_wipe_inventory",
-  {},
-  async () => {
-    const result = await homeboxRequest("/v1/actions/wipe-inventory", "POST");
-    return asToolResult(result);
-  }
-);
-
-server.tool(
-  "homebox_zero_item_time_fields",
-  {},
-  async () => {
-    const result = await homeboxRequest("/v1/actions/zero-item-time-fields", "POST");
-    return asToolResult(result);
-  }
-);
+  return server;
+}
 
 const app = express();
 const transports = new Map<string, StreamableHTTPServerTransport>();
@@ -353,7 +321,7 @@ const transports = new Map<string, StreamableHTTPServerTransport>();
 app.use(express.json({ limit: "10mb" }));
 
 async function checkHomeboxConnectivity() {
-  await homeboxRequest("/v1/items", "GET", undefined, { limit: 1 });
+  await homeboxRequest("/v1/entities", "GET", undefined, { limit: 1 });
 }
 
 function requireMcpBearerToken(req: any, res: any, next: any) {
@@ -403,7 +371,8 @@ app.all("/mcp", requireMcpBearerToken, async (req, res) => {
       },
     });
 
-    await server.connect(transport);
+    const mcpServer = createServer();
+    await mcpServer.connect(transport);
   }
 
   try {
