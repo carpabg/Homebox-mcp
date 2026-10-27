@@ -362,6 +362,10 @@ app.all("/mcp", requireMcpBearerToken, async (req, res) => {
 
   if (sessionId && transports.has(sessionId)) {
     transport = transports.get(sessionId)!;
+  } else if (sessionId && !transports.has(sessionId)) {
+    // Session expired (server restarted) — client must re-initialize
+    res.status(404).json({ error: "Session not found. Please re-initialize the MCP connection." });
+    return;
   } else {
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),

@@ -36,7 +36,7 @@ export async function homeboxRequest<T = unknown>(
   query?: Record<string, QueryValue>
 ): Promise<T> {
   const sanitizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${config.homeboxBaseUrl}${sanitizedPath}`);
+  const url = new URL(`${config.homeboxBaseUrl}/api${sanitizedPath}`);
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -61,6 +61,16 @@ export async function homeboxRequest<T = unknown>(
   }
 
   const response = await fetch(url.toString(), requestInit);
+
+  // Homebox SPA fallback returns 200 HTML for unmatched routes — detect and fail fast
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("text/html")) {
+    throw new Error(
+      `Homebox returned HTML instead of JSON for ${method} ${url.pathname}. ` +
+      `Check that HOMEBOX_BASE_URL includes the /api path prefix (e.g. http://homebox:7745/api).`
+    );
+  }
+
   const text = await response.text();
 
   let payload: unknown = null;
